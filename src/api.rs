@@ -12,6 +12,42 @@ use std::time::SystemTime;
 type Aes128Ctr = ctr::Ctr128BE<Aes128>;
 type HMac256 = Hmac<Sha256>;
 
+enum Container {
+    FLAC,
+    MP3,
+    M4A
+}
+
+enum Codec {
+    FLAC,
+    MP3,
+    AAC
+}
+
+pub struct Format(Container, Codec);
+impl Format {
+    pub fn file_format(&self) -> String {
+        match self.0 {
+            Container::FLAC => "flac",
+            Container::MP3 => "mp3",
+            Container::M4A => "m4a"
+        }.to_string()
+    }
+}
+
+fn codec2format(codec: &str) -> Option<Format> {
+    match codec {
+        "flac" => Some(Format(Container::FLAC, Codec::FLAC)),
+        "flac-mp4" => Some(Format(Container::M4A, Codec::FLAC)),
+        "mp3" => Some(Format(Container::MP3, Codec::MP3)),
+        "aac" => Some(Format(Container::M4A, Codec::AAC)),
+        "he-aac" => Some(Format(Container::M4A, Codec::AAC)),
+        "aac-mp4" => Some(Format(Container::M4A, Codec::AAC)),
+        "he-aac-mp4" => Some(Format(Container::M4A, Codec::AAC)),
+        &_ => None
+    }
+}
+
 pub async fn download_info(track_id: &str, token: String) -> Result<Value> {
     let client = reqwest::Client::new();
 
@@ -20,10 +56,10 @@ pub async fn download_info(track_id: &str, token: String) -> Result<Value> {
         .as_secs()
         .to_string();
     let quality = "lossless";
-    let codecs = "flac";
+    let codecs = "flac,flac-mp4,mp3,aac,he-aac,aac-mp4,he-aac-mp4";
     let transports = "encraw";
 
-    let hmac_input = format!("{timestamp}{track_id}{quality}{codecs}{transports}");
+    let hmac_input = format!("{timestamp}{track_id}{quality}{}{transports}", codecs.replace(",", ""));
 
     let mut mac = HMac256::new_from_slice(b"p93jhgh689SBReK6ghtw62")?;
     mac.update(hmac_input.as_bytes());
@@ -56,12 +92,12 @@ pub async fn download_info(track_id: &str, token: String) -> Result<Value> {
     let res = client.get(url).headers(headers).send().await?;
 
     let body = &res.json::<Value>().await?["result"]["downloadInfo"];
-    //println!("Response body: {body}");
+    println!("Response body: {body}");
 
     Ok(body.clone())
 }
 
-pub fn decrypt_data(data: bytes::Bytes, key: String) -> Result<Vec<u8>> {
+fn decrypt_data(data: bytes::Bytes, key: String) -> Result<Vec<u8>> {
     let key_bytes = <[u8; 16]>::from_hex(&key)?;
     let iv = [0u8; 16];
     let mut cipher = Aes128Ctr::new(&key_bytes.into(), &iv.into());
@@ -70,13 +106,13 @@ pub fn decrypt_data(data: bytes::Bytes, key: String) -> Result<Vec<u8>> {
     Ok(buf)
 }
 
-pub async fn download_track(download_info: Value) -> Result<Vec<u8>> {
+pub async fn download_track(download_info: Value) -> Result<(Vec<u8>, Format)> {
     let data = reqwest::get(download_info["urls"][0].as_str().unwrap().to_string())
         .await?
         .bytes()
         .await?;
-
     let decrypted = decrypt_data(data, download_info["key"].as_str().unwrap().to_string())
         .map_err(|e| anyhow!(e))?;
-    Ok(decrypted)
+    let file_format = codec2format(download_info["codec"].as_str().unwrap()).unwrap();
+    Ok((decrypted, file_format))
 }
