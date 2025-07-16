@@ -4,11 +4,11 @@ use base64::prelude::*;
 use ctr::cipher::{KeyIvInit, StreamCipher};
 use hex::FromHex;
 use hmac::{Hmac, Mac};
+use regex::Regex;
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue, USER_AGENT};
 use serde_json::Value;
 use sha2::Sha256;
 use std::time::SystemTime;
-use regex::Regex;
 
 type Aes128Ctr = ctr::Ctr128BE<Aes128>;
 type HMac256 = Hmac<Sha256>;
@@ -21,38 +21,40 @@ pub enum MediaType {
 }
 
 enum Container {
-    FLAC,
+    Flac,
     MP3,
-    M4A
+    M4A,
 }
 
 enum Codec {
-    FLAC,
+    Flac,
     MP3,
-    AAC
+    Aac,
 }
 
+#[allow(dead_code)]
 pub struct Format(Container, Codec);
 impl Format {
     pub fn file_format(&self) -> String {
         match self.0 {
-            Container::FLAC => "flac",
+            Container::Flac => "flac",
             Container::MP3 => "mp3",
-            Container::M4A => "m4a"
-        }.to_string()
+            Container::M4A => "m4a",
+        }
+        .to_string()
     }
 }
 
 fn codec2format(codec: &str) -> Option<Format> {
     match codec {
-        "flac" => Some(Format(Container::FLAC, Codec::FLAC)),
-        "flac-mp4" => Some(Format(Container::M4A, Codec::FLAC)),
+        "flac" => Some(Format(Container::Flac, Codec::Flac)),
+        "flac-mp4" => Some(Format(Container::M4A, Codec::Flac)),
         "mp3" => Some(Format(Container::MP3, Codec::MP3)),
-        "aac" => Some(Format(Container::M4A, Codec::AAC)),
-        "he-aac" => Some(Format(Container::M4A, Codec::AAC)),
-        "aac-mp4" => Some(Format(Container::M4A, Codec::AAC)),
-        "he-aac-mp4" => Some(Format(Container::M4A, Codec::AAC)),
-        &_ => None
+        "aac" => Some(Format(Container::M4A, Codec::Aac)),
+        "he-aac" => Some(Format(Container::M4A, Codec::Aac)),
+        "aac-mp4" => Some(Format(Container::M4A, Codec::Aac)),
+        "he-aac-mp4" => Some(Format(Container::M4A, Codec::Aac)),
+        &_ => None,
     }
 }
 
@@ -67,7 +69,10 @@ pub async fn download_info(track_id: &str, token: &String) -> Result<Value> {
     let codecs = "flac,flac-mp4,mp3,aac,he-aac,aac-mp4,he-aac-mp4";
     let transports = "encraw";
 
-    let hmac_input = format!("{timestamp}{track_id}{quality}{}{transports}", codecs.replace(",", ""));
+    let hmac_input = format!(
+        "{timestamp}{track_id}{quality}{}{transports}",
+        codecs.replace(",", "")
+    );
 
     let mut mac = HMac256::new_from_slice(b"p93jhgh689SBReK6ghtw62")?;
     mac.update(hmac_input.as_bytes());
@@ -120,13 +125,9 @@ pub async fn tracks_info(track_ids: Vec<String>, token: &String) -> Result<Value
     );
 
     let joined_ids = &track_ids.join(",");
-    let params: Vec<(&str, &str)> = vec![
-        ("track-ids", joined_ids),
-        ("with-positions", "false")
-    ];
+    let params: Vec<(&str, &str)> = vec![("track-ids", joined_ids), ("with-positions", "false")];
 
-    let url =
-        reqwest::Url::parse_with_params("https://api.music.yandex.net/tracks", &params)?;
+    let url = reqwest::Url::parse_with_params("https://api.music.yandex.net/tracks", &params)?;
     let res = client.get(url).headers(headers).send().await?;
 
     let body = &res.json::<Value>().await?["result"];
@@ -156,12 +157,12 @@ pub async fn download_track(download_info: Value) -> Result<(Vec<u8>, Format)> {
 pub fn get_kind(url: String) -> (MediaType, String) {
     let re = Regex::new(r"(album|track|artist|playlists)\/(\d+|[\w\-._@]+)$").unwrap();
     let captures = re.captures(&url).unwrap();
-    let media_type = match(&captures[1]) {
+    let media_type = match &captures[1] {
         "track" => MediaType::Track,
         "album" => MediaType::Album,
         "artist" => MediaType::Artist,
         "playlist" => MediaType::Playlist,
-        &_ => MediaType::Track
+        &_ => MediaType::Track,
     };
     (media_type, captures[2].to_owned())
 }
