@@ -134,6 +134,34 @@ pub async fn tracks_info(track_ids: Vec<String>, token: &String) -> Result<Value
     Ok(body.clone())
 }
 
+pub async fn album_tracks(album_id: String, token: &String) -> Result<Value> {
+    let client = reqwest::Client::new();
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        AUTHORIZATION,
+        HeaderValue::from_str(&format!("OAuth {token}"))?,
+    );
+    headers.insert(USER_AGENT, HeaderValue::from_static("Yandex-Music-API"));
+    headers.insert(
+        "X-Yandex-Music-Client",
+        HeaderValue::from_static("YandexMusicAndroid/24023621"),
+    );
+
+    let res = client
+        .get(format!(
+            "https://api.music.yandex.net/albums/{}/with-tracks",
+            album_id
+        ))
+        .headers(headers)
+        .send()
+        .await?;
+
+    // we are picking the first volume always until someone complains that it doesnt download all of them : 3
+    let body = &res.json::<Value>().await?["result"]["volumes"][0];
+    Ok(body.clone())
+}
+
 fn decrypt_data(data: bytes::Bytes, key: String) -> Result<Vec<u8>> {
     let key_bytes = <[u8; 16]>::from_hex(&key)?;
     let iv = [0u8; 16];

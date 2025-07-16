@@ -21,7 +21,7 @@
             },
             "args": [
                 "--url", 
-                "https://music.yandex.ru/album/34305670/track/133640862"
+                "https://music.yandex.ru/album/31570803"
             ],
             "cwd": "${workspaceFolder}"
         },
