@@ -1,0 +1,48 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'yamusdown'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=yamusdown",
+                    "--package=yamusdown",
+                ],
+                "filter": {
+                    "name": "yamusdown",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--url", 
+                "https://music.yandex.ru/album/34305670/track/133640862"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'yamusdown'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=yamusdown",
+                    "--package=yamusdown"
+                ],
+                "filter": {
+                    "name": "yamusdown",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

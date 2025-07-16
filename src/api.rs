@@ -8,9 +8,17 @@ use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue, USER_AGENT};
 use serde_json::Value;
 use sha2::Sha256;
 use std::time::SystemTime;
+use regex::Regex;
 
 type Aes128Ctr = ctr::Ctr128BE<Aes128>;
 type HMac256 = Hmac<Sha256>;
+
+pub enum MediaType {
+    Track,
+    Album,
+    Artist,
+    Playlist,
+}
 
 enum Container {
     FLAC,
@@ -48,7 +56,7 @@ fn codec2format(codec: &str) -> Option<Format> {
     }
 }
 
-pub async fn download_info(track_id: &str, token: String) -> Result<Value> {
+pub async fn download_info(track_id: &str, token: &String) -> Result<Value> {
     let client = reqwest::Client::new();
 
     let timestamp = SystemTime::now()
@@ -92,8 +100,36 @@ pub async fn download_info(track_id: &str, token: String) -> Result<Value> {
     let res = client.get(url).headers(headers).send().await?;
 
     let body = &res.json::<Value>().await?["result"]["downloadInfo"];
-    println!("Response body: {body}");
+    //println!("Response body: {body}");
 
+    Ok(body.clone())
+}
+
+pub async fn tracks_info(track_ids: Vec<String>, token: &String) -> Result<Value> {
+    let client = reqwest::Client::new();
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        AUTHORIZATION,
+        HeaderValue::from_str(&format!("OAuth {token}"))?,
+    );
+    headers.insert(USER_AGENT, HeaderValue::from_static("Yandex-Music-API"));
+    headers.insert(
+        "X-Yandex-Music-Client",
+        HeaderValue::from_static("YandexMusicAndroid/24023621"),
+    );
+
+    let joined_ids = &track_ids.join(",");
+    let params: Vec<(&str, &str)> = vec![
+        ("track-ids", joined_ids),
+        ("with-positions", "false")
+    ];
+
+    let url =
+        reqwest::Url::parse_with_params("https://api.music.yandex.net/tracks", &params)?;
+    let res = client.get(url).headers(headers).send().await?;
+
+    let body = &res.json::<Value>().await?["result"];
     Ok(body.clone())
 }
 
@@ -115,4 +151,17 @@ pub async fn download_track(download_info: Value) -> Result<(Vec<u8>, Format)> {
         .map_err(|e| anyhow!(e))?;
     let file_format = codec2format(download_info["codec"].as_str().unwrap()).unwrap();
     Ok((decrypted, file_format))
+}
+
+pub fn get_kind(url: String) -> (MediaType, String) {
+    let re = Regex::new(r"(album|track|artist|playlists)\/(\d+|[\w\-._@]+)$").unwrap();
+    let captures = re.captures(&url).unwrap();
+    let media_type = match(&captures[1]) {
+        "track" => MediaType::Track,
+        "album" => MediaType::Album,
+        "artist" => MediaType::Artist,
+        "playlist" => MediaType::Playlist,
+        &_ => MediaType::Track
+    };
+    (media_type, captures[2].to_owned())
 }
