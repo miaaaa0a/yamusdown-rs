@@ -55,21 +55,7 @@ pub async fn download_media(
 ) -> Result<(), Box<dyn Error>> {
     match kind {
         MediaType::Track => {
-            let body = api::download_info(&id, &token).await?;
-            let track = api::download_track(body).await?;
-            // since theres one track we can just grab the first item
-            let unparsed_info = &api::tracks_info(vec![id], &token).await?[0];
-            let mut track_info = TrackInfo::new();
-            track_info.parse_result(unparsed_info);
-            let file_name = format!(
-                "{:0>2}. {} - {}.{}",
-                track_info.track_position,
-                track_info.artist,
-                track_info.title,
-                track.1.file_format()
-            );
-
-            std::fs::write(file_name, track.0)?;
+            download_track(id, &token).await?;
         }
         MediaType::Album => {
             println!("type: album");
@@ -79,29 +65,33 @@ pub async fn download_media(
                 // this is the result of my stupid ahh manager Dr. Borrow Checker
                 let mut track_id = track["id"].to_string();
                 track_id = track_id.trim_matches('"').to_string();
-
-                let info = api::download_info(&track_id, &token).await?;
-                let data = api::download_track(info).await?;
-
-                let unparsed_info = &api::tracks_info(vec![track_id], &token).await?[0];
-                let mut track_info = TrackInfo::new();
-                track_info.parse_result(unparsed_info);
-
-                // for now we are saving to the same directory
-                // this'll be fixed when we set up proper download folder configuration
-                let file_name = format!(
-                    "{:0>2}. {} - {}.{}",
-                    track_info.track_position,
-                    track_info.artist,
-                    track_info.title,
-                    data.1.file_format()
-                );
-                println!("{}", file_name);
-                std::fs::write(file_name, data.0)?;
+                download_track(track_id, &token).await?;
             }
         }
         MediaType::Artist => todo!(),
         MediaType::Playlist => todo!(),
     };
+    Ok(())
+}
+
+async fn download_track(track_id: String, token: &String) -> Result<(), Box<dyn Error>> {
+    let info = api::download_info(&track_id, &token).await?;
+    let data = api::download_track(info).await?;
+
+    let unparsed_info = &api::tracks_info(vec![track_id], &token).await?[0];
+    let mut track_info = TrackInfo::new();
+    track_info.parse_result(unparsed_info);
+
+    // for now we are saving to the same directory
+    // this'll be fixed when we set up proper download folder configuration
+    let file_name = format!(
+        "{:0>2}. {} - {}.{}",
+        track_info.track_position,
+        track_info.artist,
+        track_info.title,
+        data.1.file_format()
+    );
+    println!("{}", file_name);
+    std::fs::write(file_name, data.0)?;
     Ok(())
 }
