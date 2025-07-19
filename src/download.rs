@@ -1,7 +1,7 @@
 use serde_json::Value;
 use std::error::Error;
 
-use crate::api::{self, MediaType};
+use crate::api::{self, discography, MediaType};
 
 struct TrackInfo {
     pub artist: String,
@@ -68,7 +68,24 @@ pub async fn download_media(
                 download_track(track_id, &token).await?;
             }
         }
-        MediaType::Artist => todo!(),
+        MediaType::Artist => {
+            println!("type: discography");
+            let albums = discography(id, &token).await?;
+            for album in albums.as_array().unwrap().iter() {
+                println!("downloading album");
+                let mut album_id = album["id"].to_string();
+                album_id = album_id.trim_matches('"').to_string();
+                
+                let tracks = api::album_tracks(album_id, &token).await?;
+                for track in tracks.as_array().unwrap().iter() {
+                    println!("downloading track");
+                    // this is the result of my stupid ahh manager Dr. Borrow Checker
+                    let mut track_id = track["id"].to_string();
+                    track_id = track_id.trim_matches('"').to_string();
+                    download_track(track_id, &token).await?;
+                }
+            }
+        },
         MediaType::Playlist => todo!(),
     };
     Ok(())

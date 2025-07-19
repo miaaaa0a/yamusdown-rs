@@ -162,6 +162,29 @@ pub async fn album_tracks(album_id: String, token: &String) -> Result<Value> {
     Ok(body.clone())
 }
 
+pub async fn discography(artist_id: String, token: &String) -> Result<Value> {
+        let client = reqwest::Client::new();
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        AUTHORIZATION,
+        HeaderValue::from_str(&format!("OAuth {token}"))?,
+    );
+    headers.insert(USER_AGENT, HeaderValue::from_static("Yandex-Music-API"));
+    headers.insert(
+        "X-Yandex-Music-Client",
+        HeaderValue::from_static("YandexMusicAndroid/24023621"),
+    );
+
+    let params: Vec<(&str, &str)> = vec![("sort-by", "year")];
+
+    let url = reqwest::Url::parse_with_params(&format!("https://api.music.yandex.net/artists/{}/direct-albums", artist_id), &params)?;
+    let res = client.get(url).headers(headers).send().await?;
+
+    let body = &res.json::<Value>().await?["result"]["albums"];
+    Ok(body.clone())
+}
+
 fn decrypt_data(data: bytes::Bytes, key: String) -> Result<Vec<u8>> {
     let key_bytes = <[u8; 16]>::from_hex(&key)?;
     let iv = [0u8; 16];
